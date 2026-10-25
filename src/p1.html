@@ -1,0 +1,158 @@
+<title>Parselands</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Pixelify+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one 16:9 pixel stage centred in the viewport; HUD + menus are HTML over the canvas, sized in em off the stage width. Single committed dark look (an arcade cabinet). */
+:root{
+  --void:#0c0926; --panel:rgba(30,22,82,.94); --panel-solid:#1e1652; --edge:#5a4bc4; --edge-hi:#8f80ff; --ink:#241a4a;
+  --paper:#F5F5F5; --muted:#c3bbf5;
+  --cyan:#37D7FA; --blue:#4B72FE; --lav:#92AEFF; --pink:#FF8DF2; --orange:#FF8705; --yellow:#FEEE05;
+  --stroke:linear-gradient(180deg,#37D7FA 0%,#4B72FE 40%,#FF8DF2 68%,#FF8705 100%);
+  --f-pixel:"Pixelify Sans","Courier New",monospace;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--void);background-image:radial-gradient(ellipse at 50% -10%,#2a1a8a 0%,rgba(12,9,38,0) 60%);color:var(--paper);font-family:var(--f-pixel);overflow:hidden;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+#wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding-block:10px;box-sizing:border-box}
+#game{position:relative;overflow:hidden;border-radius:4px;background:#000;font-size:16px;
+  box-shadow:0 0 0 3px var(--ink),0 0 0 6px var(--edge),0 0 0 9px var(--ink),0 18px 60px rgba(0,0,0,.6)}
+#screen{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:none}
+img.px{image-rendering:pixelated;image-rendering:crisp-edges}
+.ol{text-shadow:.09em 0 var(--ink),-.09em 0 var(--ink),0 .09em var(--ink),0 -.09em var(--ink),.09em .09em var(--ink),-.09em .09em var(--ink),.09em -.09em var(--ink),-.09em -.09em var(--ink)}
+
+/* HUD */
+#hud{position:absolute;inset:0;pointer-events:none;padding:.7em .9em;display:flex;justify-content:space-between;align-items:flex-start}
+.hearts{display:flex;gap:.18em}
+.hearts img{width:1.55em;height:auto}
+.powers{display:flex;flex-wrap:wrap;gap:.4em;margin-top:.45em}
+.chip{display:flex;align-items:center;gap:.35em;background:rgba(22,16,56,.82);border:2px solid var(--edge);padding:.12em .5em .12em .3em;font-size:.72em;border-radius:3px}
+.chip img{width:1.5em}
+.chip .bar{width:3.2em;height:.4em;background:#2c2366;position:relative;overflow:hidden}
+.chip .bar i{position:absolute;inset:0 auto 0 0;display:block}
+.stats{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:.15em}
+.pages{font-size:1.45em;font-weight:700;display:flex;align-items:center;gap:.3em;font-variant-numeric:tabular-nums}
+.pages img{width:.95em}
+.sub{font-size:.8em;font-variant-numeric:tabular-nums;letter-spacing:.03em}
+.sub b{color:var(--yellow);font-weight:600}
+
+/* Biome banner + toast */
+#banner{position:absolute;left:0;right:0;top:24%;text-align:center;pointer-events:none;opacity:0}
+#banner.show{animation:ban 3.4s ease forwards}
+#banner .b1{font-size:.75em;letter-spacing:.25em;text-transform:uppercase;color:var(--muted)}
+#banner .b2{font-size:2.5em;font-weight:700;line-height:1.1}
+#banner .b3{font-size:.72em;font-family:var(--f-mono);margin-top:.3em}
+#toast{position:absolute;left:0;right:0;top:46%;text-align:center;pointer-events:none;opacity:0;font-size:1.05em;font-weight:600}
+#toast.show{animation:ban 1.8s ease forwards}
+@keyframes ban{0%{opacity:0;transform:translateY(.5em)}12%{opacity:1;transform:none}78%{opacity:1}100%{opacity:0;transform:translateY(-.3em)}}
+
+/* Overlays + Terraria-style panels */
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(12,9,38,.15),rgba(12,9,38,.62))}
+.panel{background:var(--panel);border:3px solid var(--edge);box-shadow:inset 0 0 0 2px var(--ink),0 0 0 3px var(--ink),0 .5em 0 rgba(0,0,0,.35);border-radius:4px;padding:1em 1.4em}
+.title-card{display:flex;flex-direction:column;align-items:center;gap:.9em;text-align:center;max-width:92%}
+.howto{display:flex;flex-direction:column;align-items:center;gap:.7em;text-align:center;max-width:84%}
+.hp{margin:0;font-family:var(--f-mono);font-size:.72em;max-width:38em;color:#fff}
+.eyebrow{font-size:.72em;letter-spacing:.3em;text-transform:uppercase;color:#fff}
+.logo{margin:0;font-size:4.6em;line-height:.95;font-weight:700;letter-spacing:.05em;background:var(--stroke);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(.06em .06em 0 #241a4a) drop-shadow(0 .1em 0 #120c33)}
+.tag{margin:0;font-family:var(--f-mono);font-size:.82em;color:#fff;margin-top:-.3em}
+.legend{display:flex;flex-wrap:wrap;justify-content:center;gap:.35em .5em;max-width:34em;font-size:.68em}
+.legend span{display:flex;align-items:center;gap:.35em;background:rgba(22,16,56,.8);border:2px solid var(--edge);padding:.15em .55em .15em .3em;border-radius:3px}
+.legend img{width:1.5em}
+.keys{font-size:.62em;color:var(--muted);font-family:var(--f-mono)}
+.keys kbd{font-family:var(--f-mono);background:#2d2273;border:1px solid var(--edge-hi);border-bottom-width:2px;padding:0 .35em;border-radius:2px;color:#fff}
+.best{font-size:.7em;color:var(--yellow)}
+.credit{font-size:.66em;color:#fff;margin-top:-.4em}
+.credit a{color:var(--cyan);text-decoration:underline;text-underline-offset:.15em}
+.credit a:hover{color:var(--pink)}
+.credit a:focus-visible{outline:2px solid var(--yellow);outline-offset:2px}
+.btn{font-family:var(--f-pixel);font-weight:700;font-size:1.05em;color:#fff;background:linear-gradient(180deg,#5d4cf0,#3e18f9);border:3px solid var(--ink);box-shadow:inset 0 -.22em 0 rgba(0,0,0,.3),inset 0 .15em 0 rgba(255,255,255,.25),0 .2em 0 var(--ink);
+  padding:.35em 1.1em .45em;border-radius:3px;cursor:pointer;letter-spacing:.03em}
+.btn:hover{filter:brightness(1.15)}
+.btn:active{transform:translateY(.12em);box-shadow:inset 0 -.1em 0 rgba(0,0,0,.3),0 .08em 0 var(--ink)}
+.btn:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
+.btn.warm{background:linear-gradient(180deg,#ff9f3a,#FF8705)}
+.btn.ghost{background:#2d2273}
+.report{display:flex;flex-direction:column;gap:.6em;min-width:0;max-width:86%}
+.rh{font-family:var(--f-mono);font-size:.7em;color:var(--muted);display:flex;align-items:center;gap:.5em}
+.rh i{width:.6em;height:.6em;background:var(--orange);display:inline-block}
+#report{margin:0;font-family:var(--f-mono);font-size:.72em;line-height:1.35;background:#120c33;border:2px solid #3a2f7a;padding:.6em 1em;white-space:pre;overflow:auto;max-height:19em}
+#report .k{color:var(--pink)} #report .n{color:var(--cyan)} #report .s{color:#FFBD74} #report .p{color:#8a80c8}
+.row{display:flex;gap:.6em;justify-content:center;flex-wrap:wrap}
+.center{text-align:center;display:flex;flex-direction:column;gap:.5em;align-items:center}
+.ptitle{font-size:2em;font-weight:700}
+.center p{margin:0;font-family:var(--f-mono);font-size:.72em;color:var(--muted)}
+
+/* Below-stage controls */
+#bar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.tog{font-family:var(--f-pixel);font-size:14px;color:#fff;background:#1e1652;border:2px solid var(--edge);padding:5px 12px;border-radius:3px;cursor:pointer}
+.tog[aria-pressed="false"]{opacity:.5;text-decoration:line-through}
+.tog:focus-visible{outline:2px solid var(--yellow);outline-offset:2px}
+#touch{display:none;gap:12px;width:100%;max-width:560px}
+#touch button{flex:1;font-family:var(--f-pixel);font-weight:700;font-size:20px;color:#fff;border:3px solid var(--ink);border-radius:6px;padding:16px 0;touch-action:none;box-shadow:0 4px 0 var(--ink)}
+#t-crouch{background:linear-gradient(180deg,#4B72FE,#3e18f9)}
+#t-jump{background:linear-gradient(180deg,#FF8DF2,#FF8705)}
+@media (pointer:coarse){#touch{display:flex}}
+@media (prefers-reduced-motion:reduce){#banner.show,#toast.show{animation-duration:.01s;opacity:1}}
+</style>
+
+<div id="wrap">
+  <div id="game">
+    <canvas id="screen" aria-label="Parselands game"></canvas>
+    <div id="hud" hidden>
+      <div>
+        <div class="hearts" id="hearts"></div>
+        <div class="powers" id="powers"></div>
+      </div>
+      <div class="stats ol">
+        <div class="pages"><img class="px" id="ico-page" alt=""><span id="pages">0</span></div>
+        <div class="sub"><span id="dist">0 m</span> · score <b id="score">0</b></div>
+      </div>
+    </div>
+    <div id="banner" class="ol"><div class="b1">Entering</div><div class="b2" id="ban-name">Parse Plains</div><div class="b3" id="ban-sub"></div></div>
+    <div id="toast" class="ol"></div>
+
+    <div id="title" class="overlay">
+      <div class="title-card">
+        <div class="eyebrow ol">A LlamaIndex endless run</div>
+        <h1 class="logo">PARSELANDS</h1>
+        <p class="tag ol">Turn every page into AI-ready context.</p>
+        <div class="row"><button id="btn-start" class="btn warm">▶ Start parsing</button><button id="btn-how" class="btn ghost">How to play</button></div>
+        <div class="keys"><kbd>Space</kbd> jump · <kbd>S</kbd> crouch · <kbd>P</kbd> pause</div>
+        <div class="best ol">Best run: <span id="best">0</span></div>
+        <div class="credit ol">Made by Abdullah Sultan · <a href="https://www.amsultan.site" target="_blank" rel="noopener">amsultan.site</a></div>
+      </div>
+    </div>
+
+    <div id="howto" class="overlay" hidden>
+      <div class="panel howto">
+        <div class="ptitle ol">How to play</div>
+        <p class="hp">Your llama runs on its own. Jump the paper piles, duck under OCR noise, and parse every page you can reach.</p>
+        <div class="legend" id="legend"></div>
+        <div class="keys"><kbd>Space</kbd>/<kbd>W</kbd>/<kbd>↑</kbd> jump (hold = higher) · <kbd>S</kbd>/<kbd>↓</kbd> crouch (in air = dive) · <kbd>P</kbd> pause · <kbd>M</kbd> music</div>
+        <button id="btn-how-close" class="btn warm">Got it</button>
+      </div>
+    </div>
+
+    <div id="pause" class="overlay" hidden>
+      <div class="panel center"><div class="ptitle ol">Paused</div><p>Workflow suspended. Press P to resume.</p><button id="btn-resume" class="btn">▶ Resume</button></div>
+    </div>
+
+    <div id="over" class="overlay" hidden>
+      <div class="panel report">
+        <div class="rh"><i></i>parse_report.json</div>
+        <pre id="report"></pre>
+        <div class="row"><button id="btn-retry" class="btn warm">↻ Re-parse</button><button id="btn-menu" class="btn ghost">Title</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="bar">
+    <button class="tog" id="tg-music" aria-pressed="true">♪ Music</button>
+    <button class="tog" id="tg-sfx" aria-pressed="true">SFX</button>
+    <button class="tog" id="tg-pause">❚❚ Pause</button>
+  </div>
+  <div id="touch"><button id="t-crouch">▼ Crouch</button><button id="t-jump">▲ Jump</button></div>
+</div>
